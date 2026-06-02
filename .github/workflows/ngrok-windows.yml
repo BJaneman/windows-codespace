@@ -1,10 +1,10 @@
-name: NGROK Windows 10 LTSC via Dockur
+name: High-Speed Windows 10 LTSC (RDP Only)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allows you to trigger the workflow manually from the Actions tab
 
 jobs:
-  run-windows-container:
+  run-windows-rdp:
     runs-on: ubuntu-latest
     steps:
       - name: Verify KVM Support
@@ -15,18 +15,19 @@ jobs:
 
       - name: Start Windows 10 LTSC Container
         run: |
+          # Exposing only 3389 for native RDP. 
+          # Dropped the 8006 browser port entirely to ensure Ngrok stays within free limits.
           docker run -d \
             --name windows \
             --device=/dev/kvm \
             --cap-add NET_ADMIN \
-            -p 8006:8006 \
             -p 3389:3389 \
             -e VERSION="ltsc10" \
-            -e RAM_SIZE="4G" \
+            -e RAM_SIZE="5G" \
             -e CPU_CORES="2" \
             dockurr/windows
 
-      - name: Setup Ngrok Tunnels (Browser & RDP)
+      - name: Setup Ngrok Tunnel (RDP Only)
         env:
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
         run: |
@@ -35,34 +36,30 @@ jobs:
           echo "deb [signed-by=/etc/apt/trusted.gpg.d/ngrok.asc] https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
           sudo apt-get update && sudo apt-get install ngrok
           
-          echo "Creating Ngrok configuration for multi-tunneling..."
-          cat <<EOF > ngrok.yml
-          authtoken: $NGROK_AUTHTOKEN
-          tunnels:
-            novnc:
-              proto: http
-              addr: 8006
-            rdp:
-              proto: tcp
-              addr: 3389
-          EOF
+          echo "Starting Ngrok TCP Tunnel for RDP..."
+          # Starting only a single TCP tunnel to stay within free-tier limits
+          ngrok tcp 3389 --authtoken $NGROK_AUTHTOKEN --log=stdout > ngrok.log 2>&1 &
           
-          echo "Starting Ngrok Tunnels..."
-          ngrok start --all --config ngrok.yml > ngrok.log 2>&1 &
-          
-          # Give Ngrok a few seconds to establish connections
+          # Give Ngrok a few seconds to establish the connection
           sleep 10
           
-          # Extract the public endpoints using the local Ngrok API agent
-          echo "========================================================"
-          echo "🌐 BROWSER (noVNC) URL:"
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="novnc") | .public_url'
           echo "========================================================"
           echo "⚡ NATIVE RDP ADDRESS FOR REMOTE DESKTOP APP:"
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="rdp") | .public_url' | sed 's/tcp:\/\///'
+          RDP_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url' | sed 's/tcp:\/\///')
+          
+          if [ -z "$RDP_URL" ] || [ "$RDP_URL" == "null" ]; then
+            echo "❌ ERROR: Ngrok failed to start. Printing error log:"
+            cat ngrok.log
+          else
+            echo "$RDP_URL"
+            echo ""
+            echo "👤 Username: docker"
+            echo "🔑 Password: (Leave blank / press Enter)"
+          fi
           echo "========================================================"
 
       - name: Monitor Installation and System Logs
         run: |
           echo "Tailing Dockur logs. Windows installation takes roughly 15-20 minutes."
+          echo "Keep this window open to keep the GitHub Actions runner alive (Max limit: 6 hours)."
           docker logs -f windows
