@@ -1,4 +1,4 @@
-name: Windows 10 LTSC via Dockur
+name: NGROK Windows 10 LTSC via Dockur
 
 on:
   workflow_dispatch:
