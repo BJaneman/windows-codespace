@@ -1,0 +1,53 @@
+name: Windows 10 LTSC via Dockur
+
+on:
+  workflow_dispatch: # Allows you to trigger the workflow manually from the Actions tab
+
+jobs:
+  run-windows-container:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify KVM Support
+        run: |
+          echo "Checking for Hardware Virtualization Support..."
+          sudo apt-get update && sudo apt-get install -y qemu-kvm
+          ls -l /dev/kvm || echo "KVM not available, falling back to software emulation."
+
+      - name: Start Windows 10 LTSC Container
+        run: |
+          # To install LTSC specifically, provide a direct URL to the LTSC ISO in the VERSION variable.
+          # If you just want standard Windows 10, change VERSION to "10".
+          docker run -d \
+            --name windows \
+            --device=/dev/kvm \
+            --cap-add NET_ADMIN \
+            -p 8006:8006 \
+            -p 3389:3389 \
+            -e VERSION="https://example.com/windows-10-ltsc.iso" \
+            -e RAM_SIZE="4G" \
+            -e CPU_CORES="2" \
+            dockur/windows
+
+      - name: Setup Cloudflare Tunnel for Browser Access
+        run: |
+          echo "Downloading Cloudflared..."
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+          
+          echo "Starting Tunnel on Port 8006..."
+          # Run cloudflared in the background and route to the Dockur web viewer
+          cloudflared tunnel --url http://localhost:8006 > cloudflared.log 2>&1 &
+          
+          # Wait for the tunnel to establish and generate a URL
+          sleep 10
+          
+          echo "========================================================"
+          echo "🌐 ACCESS YOUR WINDOWS BROWSER INTERFACE HERE:"
+          grep -o 'https://.*\.trycloudflare.com' cloudflared.log
+          echo "========================================================"
+
+      - name: Monitor Installation and System Logs
+        run: |
+          echo "Tailing Dockur logs. You can monitor the ISO download and boot process here."
+          echo "This step also keeps the GitHub Actions runner alive (Max limit: 6 hours)."
+          docker logs -f windows
