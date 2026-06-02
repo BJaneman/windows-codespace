@@ -15,18 +15,18 @@ jobs:
 
       - name: Start Windows 10 LTSC Container
         run: |
-          # To install LTSC specifically, provide a direct URL to the LTSC ISO in the VERSION variable.
-          # If you just want standard Windows 10, change VERSION to "10".
+          # Fixed the image name to dockurr/windows
+          # Changed VERSION to "ltsc10" for automated Windows 10 LTSC download
           docker run -d \
             --name windows \
             --device=/dev/kvm \
             --cap-add NET_ADMIN \
             -p 8006:8006 \
             -p 3389:3389 \
-            -e VERSION="https://example.com/windows-10-ltsc.iso" \
+            -e VERSION="ltsc10" \
             -e RAM_SIZE="4G" \
             -e CPU_CORES="2" \
-            dockur/windows
+            dockurr/windows
 
       - name: Setup Cloudflare Tunnel for Browser Access
         run: |
@@ -35,7 +35,6 @@ jobs:
           sudo dpkg -i cloudflared-linux-amd64.deb
           
           echo "Starting Tunnel on Port 8006..."
-          # Run cloudflared in the background and route to the Dockur web viewer
           cloudflared tunnel --url http://localhost:8006 > cloudflared.log 2>&1 &
           
           # Wait for the tunnel to establish and generate a URL
@@ -49,5 +48,4 @@ jobs:
       - name: Monitor Installation and System Logs
         run: |
           echo "Tailing Dockur logs. You can monitor the ISO download and boot process here."
-          echo "This step also keeps the GitHub Actions runner alive (Max limit: 6 hours)."
           docker logs -f windows
