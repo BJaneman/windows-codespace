@@ -1,7 +1,7 @@
 name: High-Speed Windows 10 LTSC (RDP Only)
 
 on:
-  workflow_dispatch: # Allows you to trigger the workflow manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   run-windows-rdp:
@@ -15,8 +15,6 @@ jobs:
 
       - name: Start Windows 10 LTSC Container
         run: |
-          # Exposing only 3389 for native RDP. 
-          # Dropped the 8006 browser port entirely to ensure Ngrok stays within free limits.
           docker run -d \
             --name windows \
             --device=/dev/kvm \
@@ -27,31 +25,31 @@ jobs:
             -e CPU_CORES="2" \
             dockurr/windows
 
-      - name: Setup Ngrok Tunnel (RDP Only)
-        env:
-          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+      - name: Setup Bore Tunnel (RDP - No Account Required)
         run: |
-          echo "Installing Ngrok..."
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb [signed-by=/etc/apt/trusted.gpg.d/ngrok.asc] https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt-get update && sudo apt-get install ngrok
+          echo "Downloading Bore..."
+          wget -q https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz
+          tar -xf bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz
+          chmod +x bore
           
-          echo "Starting Ngrok TCP Tunnel for RDP..."
-          # Starting only a single TCP tunnel to stay within free-tier limits
-          ngrok tcp 3389 --authtoken $NGROK_AUTHTOKEN --log=stdout > ngrok.log 2>&1 &
+          echo "Starting Bore TCP Tunnel for RDP..."
+          # Tunneling port 3389 to the public bore.pub server
+          ./bore local 3389 --to bore.pub > bore.log 2>&1 &
           
-          # Give Ngrok a few seconds to establish the connection
-          sleep 10
+          # Give Bore a few seconds to connect
+          sleep 5
           
           echo "========================================================"
           echo "⚡ NATIVE RDP ADDRESS FOR REMOTE DESKTOP APP:"
-          RDP_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url' | sed 's/tcp:\/\///')
           
-          if [ -z "$RDP_URL" ] || [ "$RDP_URL" == "null" ]; then
-            echo "❌ ERROR: Ngrok failed to start. Printing error log:"
-            cat ngrok.log
+          # Extracting the dynamic port assigned by bore.pub
+          BORE_PORT=$(cat bore.log | grep -o 'listening at bore.pub:[0-9]*' | awk -F':' '{print $2}')
+          
+          if [ -z "$BORE_PORT" ]; then
+            echo "❌ ERROR: Bore failed to start. Printing error log:"
+            cat bore.log
           else
-            echo "$RDP_URL"
+            echo "bore.pub:$BORE_PORT"
             echo ""
             echo "👤 Username: docker"
             echo "🔑 Password: (Leave blank / press Enter)"
@@ -61,5 +59,5 @@ jobs:
       - name: Monitor Installation and System Logs
         run: |
           echo "Tailing Dockur logs. Windows installation takes roughly 15-20 minutes."
-          echo "Keep this window open to keep the GitHub Actions runner alive (Max limit: 6 hours)."
+          echo "Keep this window open to keep the GitHub Actions runner alive."
           docker logs -f windows
