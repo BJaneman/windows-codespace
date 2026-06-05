@@ -23,9 +23,9 @@ jobs:
             --network vm-net \
             --device=/dev/kvm \
             --cap-add NET_ADMIN \
-            -e VERSION="ltsc10" \
-            -e RAM_SIZE="5G" \
-            -e CPU_CORES="2" \
+            -e VERSION="win10" \
+            -e RAM_SIZE="10G" \
+            -e CPU_CORES="4" \
             dockurr/windows
 
       - name: Setup Apache Guacamole Stack
