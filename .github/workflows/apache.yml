@@ -1,4 +1,4 @@
-name: High-Speed Windows 10 LTSC (Guacamole Web Access)
+name: Windows 10 Pro RDP
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
       - name: Create Docker Network
         run: docker network create vm-net
 
-      - name: Start Windows 10 LTSC Container
+      - name: Start Windows 10 Pro Container
         run: |
           docker run -d \
             --name windows \
